@@ -3,6 +3,7 @@ import numpy as np
 from fec import FluxEquilibriumClustering
 
 
+
 def test_two_clusters():
     """Test FEC on two well-separated clusters."""
     np.random.seed(2)
