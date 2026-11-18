@@ -40,16 +40,24 @@ class FluxEquilibriumClustering:
     """
 
     def __init__(
-        self,
-        k: int = 10,
-        sigma: Optional[float] = None,
-        alpha: float = 0.5,
-        T: int = 25,
-        epsilon: float = 1e-4,
-        beta: Optional[float] = None,
+            self,
+            k: int = 10,
+            sigma: Optional[float] = None,
+            alpha: float = 0.5,
+            T: int = 25,
+            epsilon: float = 1e-4,
+            beta: Optional[float] = None,
     ) -> None:
+
+        self.k=k
+        self.sigma = sigma
+        self.alpha = alpha
+        self.T = T
+        self.epsilon = epsilon
+        self.beta = beta
+
         # Hint: self.k = k, self.sigma = sigma, etc.
-        raise NotImplementedError
+        #raise NotImplementedError
 
     def fit(self, X: np.ndarray) -> "FluxEquilibriumClustering":
         """Compute cluster labels for *X*.
@@ -74,10 +82,217 @@ class FluxEquilibriumClustering:
         # Hint: Start with computing centroid = X.mean(axis=0)
 
         # Add your code here
+    # def fit(self, X) -> "FluxEquilibriumClustering":
 
-        # ---- DO NOT CHANGE THE REST OF THIS METHOD ---- #
-        # We require you maintain these attributes for testing purpose.
-        self.w_ij = w_ij
+        #STEP 1 (centroid and distance of each point from centroid)
+
+        centroid = np.mean(X, axis=0)  #axis=0 means avg of all x-values, avg of all y-values
+
+        #print(centroid)
+                                    # axis=1 means first-neighbor column and second-neighbor column separately
+        distances=np.linalg.norm(X-centroid, axis=1)   # distance from each point to centroid. We don't need only vector but sqrt(x^2 + y^2)
+                                                    # axis=1 means calculate one distance for each row of x
+        #print(distances)
+
+        #Step 2 (pair wise squared distance)
+
+        #bubble sorting loop, p0 is compared with all points including itself, then loop is increments to p1 and then p1 will be compared with every point in array
+
+        pw_squared_distance=[]
+
+        for i in range(len(X)):    # iteration1:  for P0 in array for the length of array
+            rows=[]
+
+            for j in range(len(X)):    # for all P0-P7
+                rows.append(np.sum((X[i]-X[j])**2))    # when p0 is compared with p0, the difference will be 0, then p0 will be compared with p1.,p2 and so on....
+
+            pw_squared_distance.append(rows)          # append all distances when p0 is compared with p0-p7,
+
+        pw_sq=np.array(pw_squared_distance)      # convert it into array
+
+       # print(pw_sq)
+
+        # Step 3 (Calculating sigma)
+
+        pairwise_distances=[]
+
+        for i in range(len(X)):
+            for j in range(i+1, len(X)):
+                sq_dist=np.sum((X[i]-X[j])**2)
+                reg_dist=np.sqrt(sq_dist)
+                pairwise_distances.append(reg_dist)
+
+        median_dist= np.median(pairwise_distances)
+        sigma= 0.2 * median_dist
+
+        sigma_sq= sigma*sigma
+
+        #print(f"sigma_squared: {sigma_sq}")
+
+        # Step 4 (Calculate two nearest neighbors from  each row in pairwise distances ignoring self compare)
+
+        nearest=[]
+
+        wij=[]
+        effective_k = min(self.k, len(X) - 1)
+
+        for i in range(len(pw_sq)):
+
+            nearest.append(
+                np.argsort(pw_sq[i])[1:effective_k + 1]
+            )
+            #nearest.append( np.argsort(pw_sq[i])[1:3])   # range 1-3 will leave element at index 0 (which will always be 0, because 0 is the smallest, so in argsort 0 comes first)
+                                                         # will pick only 1,2 index values.
+        #print(np.array(nearest))
+
+        # Step 5 ( calculating Using the Gaussian kernel, the resulting k-NN edge weights for each node)
+
+        weights = []
+        for i in range(len(nearest)):   # for first iteration, i=0, nearest[0] == [3,2]
+            row_weights=[]
+            for y in range(len(nearest[i])):   # for first iteration, y in nearest[0][0] ==> 3
+                j=nearest[i][y]                # j= 3
+
+                sq_dist=pw_sq[i][j]          # from sample 0 to sample 3, then in 2nd iteration sample 0 to sample 2
+                wij=np.exp(-sq_dist/sigma_sq)
+
+                row_weights.append(wij)
+            weights.append(row_weights)
+
+        #print(np.array(weights))
+
+        # Step 6 (Initialize flux)
+
+        flux=np.ones(len(X))    # initialize flux with all ones
+        #delta_incoming=np.zeros(len(X))
+
+
+        tau= 0.1 * sigma
+        for x in range(self.T):    # if T=5, means how many times we want to distribute flux, loop runs 0-4
+            delta_final_out = []
+            delta_incoming = np.zeros(len(X))  # array of 8 zeroes in the beginning for incoming flux
+            for i in range (len(X)):    # for sample 0
+
+                # calculate sum_weights
+                sum_weights=0           # sum_weights is 0 initialized
+                for y in range(len(nearest[i])):    # y = nearest[0] that is [3,2]
+                    j=nearest[i][y]                # nearest[0][0] == 3, so j=3
+                                                # j is the sample receiving the flux, in this case 0 is giving away flux to sample 3 and 2
+
+                    if distances[j] <= distances[i] + tau:    # if sample 3 <= sample[0] + tau, we can add both the samples weight
+
+                        # Edge-weight will be different in each iteration, so Computing flux-aware edge weight
+
+                        if x==0 or self.beta==0:
+                            phi =1
+                        elif self.beta is None:
+                            phi= np.log (1+ flux[j])
+                        else:
+                            phi= flux[j] ** self.beta
+
+                        adjusted_weight = weights[i][y] * phi
+                        sum_weights += adjusted_weight       # sum_weights= weights[0][0] = 0.447
+
+                                                    # in next iteration y will be 1, so weights [0][1]= 0.4090
+                        #flux= self.alpha * (weights[i][y]/sum_weights)
+
+                # calculate delta-outgoing, and incoming
+                delta_out=[]
+
+                for y in range(len(nearest[i])):
+                    j=nearest[i][y]    # j = 3 and 2 in each iteration respectively
+
+                    if distances[j] <= distances[i] + tau:
+
+                        # Edge-weight will be different in each iteration, so Computing flux-aware edge weight
+
+                        if x == 0 or self.beta == 0:
+                            phi = 1
+                        elif self.beta is None:
+                            phi = np.log(1 + flux[j])
+                        else:
+                            phi = flux[j] ** self.beta
+
+                        adjusted_weight = weights[i][y] * phi
+
+                        delta=  self.alpha * adjusted_weight * flux[i] / sum_weights   #outgoing from sample 0, becomes incoming for sample 2 and 3
+                        delta_incoming[j]+=delta                  # so for first iteration j=3, means sample 3 receives this flux from sample 0
+                    else:
+                        delta=0      # if downhill condition fails, it won't distribute flux so outgoing from this sample will be 0
+
+                    delta_out.append(delta)
+                delta_final_out.append(delta_out)  # how much sample i sent to each neighbor
+
+        #print(np.array(delta_final_out))
+            outgoing= np.sum(delta_final_out, axis=1)   #total amount sample i sent
+            incoming= delta_incoming
+            #print(f"incoming: {incoming}")
+
+          #  print(f"outgoing: {np.array(outgoing)}")
+
+            new_flux= flux - outgoing + incoming
+
+            flux=new_flux
+           # print(np.sum(flux))
+        # Detect sinks using outgoing flux from the final iteration
+
+        sinks=[]
+
+        for i in range(len(outgoing)):
+            if outgoing[i] < self. epsilon:
+                sinks.append(i)
+
+        if len(sinks)==0:
+            closest = np.argmin(distances)   # if there is no sink node, choose the closest sample from centroid as the sink node
+            sinks.append(closest)
+
+        #print(sinks)
+
+
+        # detect sink and non-sink nodes and label sink nodes
+
+        labels= np.full(len(X), -1)
+
+        for label,sink in enumerate(sinks):   # gives position number and sink value position (0,1,2) value= [2,5,7]
+            labels[sink]= label
+
+        #print(labels)
+
+        # finding steepest neighbors of non-sink nodes
+
+        steepest={}
+
+        for i in range(len(X)):
+            if i not in sinks:
+                max_node= np.argmax(delta_final_out[i])
+                steepest[i]= int(nearest[i][max_node])
+        #print(np.array(steepest))
+
+
+        # detecting a cycle and breaking it by creating current node a sink node
+        for i in range(len(X)):  # 0--7
+            visited=[]
+            node=i    # node=0
+
+            while node not in sinks:   # 0 is not in sinks? true
+                if node in visited:  # 0 is not in visited yet
+                    sinks.append(int(node))  # if node is already in visited, make it a new sink
+                    labels[node] = len(sinks) - 1  # label the sink, since this is new sink
+                    break
+                visited.append(node)   # it goes  ahead and add 0 to visited
+                node=steepest[node]    # node's new value becomes steepest[0], and steepest neighbor of 0 is 3, so node becomes 3
+            sink_label = labels[node]   # after the path ends, give this new sink a cluster label
+
+            for node in visited:
+                labels[node]=sink_label  # give that same label to every visited node leading to that sink
+
+        #print (labels)
+
+
+
+    # ---- DO NOT CHANGE THE REST OF THIS METHOD ---- #
+    # We require you maintain these attributes for testing purpose.
+        self.w_ij = np.array(weights)
         self.flux = flux
         self.sinks = sinks
         self.labels = labels
@@ -99,3 +314,17 @@ class FluxEquilibriumClustering:
             f"beta={getattr(self, 'beta', '?')}",
         )
         return f"{self.__class__.__name__}({', '.join(params)})"
+
+X = np.array([
+        [2.67, 2.95],
+        [1.29, 4.31],
+        [1.57, 2.33],
+        [3.40, 2.00],
+        [-3.85, -3.73],
+        [-2.56, -1.17],
+        [-2.97, -3.89],
+        [-2.57, -3.48]
+    ])
+
+model = FluxEquilibriumClustering()
+model.fit(X)
