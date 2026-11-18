@@ -342,7 +342,10 @@ class FluxEquilibriumClustering:
     # We require you maintain these attributes for testing purpose.
         self.w_ij = w_ij
         self.flux = flux
-        self.sinks = np.array(sinks, dtype=int)
+        sink_mask = np.zeros(len(X), dtype=bool)
+        for sink in sinks:
+            sink_mask[sink] = True
+        self.sinks = sink_mask
         self.labels = labels
 
         return self
