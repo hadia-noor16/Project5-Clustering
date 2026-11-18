@@ -122,10 +122,14 @@ class FluxEquilibriumClustering:
                 reg_dist=np.sqrt(sq_dist)
                 pairwise_distances.append(reg_dist)
 
-        median_dist= np.median(pairwise_distances)
-        sigma= 0.2 * median_dist
+        median_dist = np.median(pairwise_distances)
 
-        sigma_sq= sigma*sigma
+        if self.sigma is None:
+            sigma = 0.2 * median_dist
+        else:
+            sigma = self.sigma
+
+        sigma_sq = sigma * sigma
 
         #print(f"sigma_squared: {sigma_sq}")
 
@@ -158,6 +162,7 @@ class FluxEquilibriumClustering:
 
                 row_weights.append(wij)
             weights.append(row_weights)
+        w_ij = np.array(weights)
 
         #print(np.array(weights))
 
@@ -286,15 +291,57 @@ class FluxEquilibriumClustering:
             for node in visited:
                 labels[node]=sink_label  # give that same label to every visited node leading to that sink
 
-        #print (labels)
+        print("labels BEFORE merging:", labels)
+        print("sinks:", sinks)
+        print("steepest:", steepest)
 
+
+        # merging small cluster
+        s_min = max(2, len(X) // 20)
+
+        unique_labels, counts = np.unique(labels, return_counts=True)
+        print(unique_labels)
+        print(counts)
+
+        small_clusters=[]
+        large_clusters=[]
+
+        for label, count in zip(unique_labels, counts):
+            if count > s_min:
+                large_clusters.append(label)
+            else:
+                small_clusters.append(label)
+
+        print(f"large_cluster:{large_clusters}")
+        print(f"small_clusters:{small_clusters}")
+
+        for small_label in small_clusters:  # looping through all small clusters
+            small_points = X[labels == small_label]  # get points that belong to that small cluster
+            small_centroid = np.mean(small_points, axis=0)  # centroid of small points
+
+            closest_distance = float("inf")
+            closest_label = None
+
+            for large_label in large_clusters:
+                large_points = X[labels == large_label]
+                large_centroid = np.mean(large_points, axis=0)
+
+                dist_clusters=np.linalg.norm(small_centroid-large_centroid)
+
+                if dist_clusters < closest_distance:
+                    closest_distance = dist_clusters
+                    closest_label = large_label
+
+            labels[labels == small_label] = closest_label
+
+        print(labels)
 
 
     # ---- DO NOT CHANGE THE REST OF THIS METHOD ---- #
     # We require you maintain these attributes for testing purpose.
-        self.w_ij = np.array(weights)
+        self.w_ij = w_ij
         self.flux = flux
-        self.sinks = sinks
+        self.sinks = np.array(sinks, dtype=int)
         self.labels = labels
 
         return self
