@@ -149,6 +149,7 @@ class FluxEquilibriumClustering:
                                                          # will pick only 1,2 index values.
         #print(np.array(nearest))
 
+
         # Step 5 ( calculating Using the Gaussian kernel, the resulting k-NN edge weights for each node)
 
         weights = []
@@ -291,35 +292,35 @@ class FluxEquilibriumClustering:
             for node in visited:
                 labels[node]=sink_label  # give that same label to every visited node leading to that sink
 
-        print("labels BEFORE merging:", labels)
-        print("sinks:", sinks)
-        print("steepest:", steepest)
+        #print("labels BEFORE merging:", labels)
+        #print("sinks:", sinks)
+        #print("steepest:", steepest)
 
 
         # merging small cluster
         s_min = max(2, len(X) // 20)
 
         unique_labels, counts = np.unique(labels, return_counts=True)
-        print(unique_labels)
-        print(counts)
+        #print(unique_labels)
+        #print(counts)
 
         small_clusters=[]
         large_clusters=[]
 
         for label, count in zip(unique_labels, counts):
-            if count > s_min:
-                large_clusters.append(label)
-            else:
+            if count < s_min:
                 small_clusters.append(label)
+            else:
+                large_clusters.append(label)
 
-        print(f"large_cluster:{large_clusters}")
-        print(f"small_clusters:{small_clusters}")
+        #print(f"large_cluster:{large_clusters}")
+        #print(f"small_clusters:{small_clusters}")
 
         for small_label in small_clusters:  # looping through all small clusters
             small_points = X[labels == small_label]  # get points that belong to that small cluster
             small_centroid = np.mean(small_points, axis=0)  # centroid of small points
 
-            closest_distance = float("inf")
+            closest_distance = float("inf")  # intitialzing closest_dist with infinity,
             closest_label = None
 
             for large_label in large_clusters:
@@ -328,13 +329,13 @@ class FluxEquilibriumClustering:
 
                 dist_clusters=np.linalg.norm(small_centroid-large_centroid)
 
-                if dist_clusters < closest_distance:
+                if dist_clusters < closest_distance:   # upon checking first dist, it will be smaller than infinity
                     closest_distance = dist_clusters
                     closest_label = large_label
 
             labels[labels == small_label] = closest_label
 
-        print(labels)
+        #print(labels)
 
 
     # ---- DO NOT CHANGE THE REST OF THIS METHOD ---- #
@@ -362,16 +363,16 @@ class FluxEquilibriumClustering:
         )
         return f"{self.__class__.__name__}({', '.join(params)})"
 
-X = np.array([
-        [2.67, 2.95],
-        [1.29, 4.31],
-        [1.57, 2.33],
-        [3.40, 2.00],
-        [-3.85, -3.73],
-        [-2.56, -1.17],
-        [-2.97, -3.89],
-        [-2.57, -3.48]
-    ])
-
-model = FluxEquilibriumClustering()
-model.fit(X)
+# #X = np.array([
+#         [2.67, 2.95],
+#         [1.29, 4.31],
+#         [1.57, 2.33],
+#         [3.40, 2.00],
+#         [-3.85, -3.73],
+#         [-2.56, -1.17],
+#         [-2.97, -3.89],
+#         [-2.57, -3.48]
+#     ])
+#
+# model = FluxEquilibriumClustering()
+# model.fit(X)
